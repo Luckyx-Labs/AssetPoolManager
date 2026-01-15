@@ -1,15 +1,49 @@
-# Remix compiler artifacts
+# Compiler artifacts
 **/artifacts/
 **/artifacts/**
+out/
+cache/
 
-# Remix plugin state folders
-deps/
-states/
+# Dependencies (managed by forge)
+# Uncomment if you want to exclude lib/ from version control
+# lib/
+
+# Forge broadcast logs - contains deployment details
+broadcast/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Security analysis results - keep internal
+mythril*
+slither*
+*.analysis.txt
+*_analysis_results.txt
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Debug info
 *.dbg.json
 *.tsbuildinfo
 
-# Optional
-.env
-.env.local
+# Remix plugin state folders
+deps/
+states/
+
+# Node (if using npm packages)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Coverage
+coverage/
+lcov.info
