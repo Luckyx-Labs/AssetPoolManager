@@ -8,9 +8,9 @@ A secure, upgradeable multi-signature asset pool manager for Ethereum, supportin
 
 ## Features
 
-- 💰 **Multi-Asset Support** - Handle ETH and any ERC20 token in a single pool
-- 📦 **Batch Operations** - Efficient batch payin/payout for multiple recipients
-- 🛡️ **Security First** - ReentrancyGuard, SafeERC20, and fee-on-transfer token handling
+- **Multi-Asset Support** - Handle ETH and any ERC20 token in a single pool
+- **Batch Operations** - Efficient batch payin/payout for multiple recipients
+- **Security First** - ReentrancyGuard, SafeERC20, and fee-on-transfer token handling
 
 ## Architecture
 
@@ -98,7 +98,6 @@ This contract has been designed with security best practices:
 
 - ✅ ReentrancyGuard for all state-changing functions
 - ✅ SafeERC20 for token transfers
-- ✅ Fee-on-transfer token support
 
 ## Development
 
