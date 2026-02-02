@@ -19,18 +19,11 @@ interface IAssetPoolManager {
     event TokenRemoved(address indexed token);
     event ETHDeposit(address indexed user, uint256 amount, uint256 timestamp);
     event ETHWithdraw(address indexed user, uint256 amount, uint256 timestamp);
-    event WithdrawLimitSet(address indexed token, uint256 limit);
     event BatchPayinItem(
         address indexed from,
         address indexed token,
         uint256 requestedAmount,
         uint256 receivedAmount,
-        uint256 timestamp
-    );
-    event BatchPayoutItem(
-        address indexed to,
-        address indexed token,
-        uint256 amount,
         uint256 timestamp
     );
 
@@ -47,7 +40,7 @@ interface IAssetPoolManager {
     function getPoolAllBalances() external view returns (address[] memory, uint256[] memory);
 
     function batchTransferPayin(address[] calldata froms, address[] calldata tokens, uint256[] calldata amounts) external;
-    function batchTransferPayout(address[] calldata recipients, address[] calldata tokens, uint256[] calldata amounts) external;
+    
     // ETH functionality
     function depositETH() external payable;
     function withdrawETH(uint256 amount, address recipient) external;

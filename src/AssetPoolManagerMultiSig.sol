@@ -29,9 +29,6 @@ contract AssetPoolManagerMultiSig is
     /// @notice Role identifier for administrators with full access
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     
-    /// @notice Role identifier for operators with limited withdrawal permissions
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
     /// @notice Maximum number of items allowed in batch operations
     uint256 public constant MAX_BATCH_SIZE = 25;
     
@@ -43,9 +40,6 @@ contract AssetPoolManagerMultiSig is
     
     /// @notice List of all supported token addresses
     address[] public tokenList;
-    
-    /// @notice Withdrawal limits per token for Operator role (token => max amount per tx)
-    mapping(address => uint256) public withdrawLimits;
     
     /// @notice Sentinel address representing native ETH
     address public constant ETH_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
@@ -91,7 +85,7 @@ contract AssetPoolManagerMultiSig is
     /**
      * @notice Initializes the contract with the given admin address
      * @dev Can only be called once due to initializer modifier
-     * @param admin Address to be granted Admin, DefaultAdmin, and Operator roles
+     * @param admin Address to be granted Admin and DefaultAdmin roles
      */
     function initialize(address admin) external initializer {
         __ReentrancyGuard_init();
@@ -101,7 +95,6 @@ contract AssetPoolManagerMultiSig is
 
         _grantRole(ADMIN_ROLE, admin);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(OPERATOR_ROLE, admin);
 
         supportedTokens[ETH_ADDRESS] = true;
         tokenList.push(ETH_ADDRESS);
@@ -110,17 +103,6 @@ contract AssetPoolManagerMultiSig is
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
-    }
-
-    /**
-     * @notice Sets the withdrawal limit for Operator role on a specific token
-     * @dev Only callable by Admin. Set to 0 to disable Operator withdrawals for the token
-     * @param token The token address to set limit for
-     * @param limit Maximum amount Operator can withdraw per transaction
-     */
-    function setWithdrawLimit(address token, uint256 limit) external onlyAdmin {
-        withdrawLimits[token] = limit;
-        emit WithdrawLimitSet(token, limit);
     }
 
     /**
@@ -212,7 +194,7 @@ contract AssetPoolManagerMultiSig is
 
     /**
      * @notice Withdraws native ETH from the pool
-     * @dev Callable by Admin (unlimited) or Operator (with limits)
+     * @dev Only callable by Admin role
      * @param amount The amount of ETH to withdraw (in wei)
      * @param recipient The address to receive the ETH
      */
@@ -237,7 +219,7 @@ contract AssetPoolManagerMultiSig is
 
     /**
      * @notice Withdraws ERC20 tokens from the pool
-     * @dev Callable by Admin (unlimited) or Operator (with limits)
+     * @dev Only callable by Admin role
      * @param token The ERC20 token address to withdraw
      * @param amount The amount of tokens to withdraw
      * @param recipient The address to receive the tokens
@@ -261,20 +243,10 @@ contract AssetPoolManagerMultiSig is
     }
     
     /**
-     * @dev Internal function to check withdrawal permissions
-     * @param token The token being withdrawn
-     * @param amount The amount being withdrawn
+     * @dev Internal function to check withdrawal permissions (Admin only)
      */
-    function _checkWithdrawPermissions(address token, uint256 amount) internal view {
-        if (hasRole(ADMIN_ROLE, msg.sender)) {
-            return;
-        } else if (hasRole(OPERATOR_ROLE, msg.sender)) {
-            uint256 limit = withdrawLimits[token];
-            require(limit > 0, "AssetPoolManager: limit not set");
-            require(amount <= limit, "AssetPoolManager: amount exceeds operator limit");
-        } else {
-            revert("AssetPoolManager: missing role");
-        }
+    function _checkWithdrawPermissions(address, uint256) internal view {
+        require(hasRole(ADMIN_ROLE, msg.sender), "AssetPoolManager: must have admin role");
     }
 
     /**
@@ -295,11 +267,7 @@ contract AssetPoolManagerMultiSig is
         whenNotPaused
         validBatchSize(froms.length)
     {
-        // Check caller has Admin or Operator role
-        require(
-            hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
-            "AssetPoolManager: missing role"
-        );
+        require(hasRole(ADMIN_ROLE, msg.sender), "AssetPoolManager: must have admin role");
         
         require(
             froms.length == tokens.length &&
@@ -330,61 +298,6 @@ contract AssetPoolManagerMultiSig is
         }
     }
 
-    /**
-     * @notice Batch transfers tokens/ETH to multiple recipients for settlement
-     * @dev Callable by Admin or Operator without amount limits
-     *      Validates all transfers before executing any to ensure atomicity
-     * @param recipients Array of recipient addresses
-     * @param tokens Array of token addresses (use ETH_ADDRESS for native ETH)
-     * @param amounts Array of amounts to transfer to each recipient
-     */
-    function batchTransferPayout(
-        address[] calldata recipients,
-        address[] calldata tokens,
-        uint256[] calldata amounts
-    ) 
-        external 
-        nonReentrant 
-        whenNotPaused
-        validBatchSize(recipients.length)
-    {
-        // Check caller has Admin or Operator role
-        require(
-            hasRole(ADMIN_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
-            "AssetPoolManager: missing role"
-        );
-
-        require(
-            recipients.length == tokens.length && 
-            tokens.length == amounts.length, 
-            "AssetPoolManager: array length mismatch"
-        );
-        
-        // Validate and update balances
-        for (uint256 i = 0; i < recipients.length; i++) {
-            require(recipients[i] != address(0), "AssetPoolManager: invalid recipient address");
-            require(amounts[i] > 0, "AssetPoolManager: amount must be greater than 0");
-            require(supportedTokens[tokens[i]], "AssetPoolManager: token not supported");
-            require(_poolBalances[tokens[i]] >= amounts[i], "AssetPoolManager: insufficient pool balance");
-            
-            // Update balances
-            _poolBalances[tokens[i]] -= amounts[i];
-        }
-        
-        // Execute actual transfers and emit events
-        for (uint256 i = 0; i < recipients.length; i++) {
-            if (tokens[i] == ETH_ADDRESS) {
-                (bool success, ) = recipients[i].call{value: amounts[i]}("");
-                require(success, "AssetPoolManager: ETH transfer failed");
-            } else {
-                IERC20(tokens[i]).safeTransfer(recipients[i], amounts[i]);
-            }
-            
-            // Emit event for each transfer with detailed info
-            emit BatchPayoutItem(recipients[i], tokens[i], amounts[i], block.timestamp);
-        }
-    }
-    
     /**
      * @notice Returns the pool balance for a specific token
      * @param token The token address to query (use ETH_ADDRESS for native ETH)
